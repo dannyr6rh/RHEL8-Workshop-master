@@ -1,0 +1,23 @@
+---
+- hosts: workstation.example.com
+  tasks:
+
+    - name: "SETUP VIRTUALIZATION: yum install qemu-kvm libvirt virt-install libvirt-client libguestfs-tools"
+      yum: name=qemu-kvm,libvirt,virt-install,libvirt-client,libguestfs-tools,wget,cockpit-machines,lorax-composer,composer-cli,cockpit-composer state=installed
+
+    - name: "SETUP VIRTUALIZATION: service restart"
+      service: name="cockpit.socket" state=started enabled=yes
+      
+    - name: "SETUP VIRTUALIZATION: firewall configuration"
+      firewalld: port=9090/tcp permanent=yes immediate=yes state=enabled
+      
+    - name: "SETUP VIRTUALIZATION: cheat script installs"
+      template:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        owner: root
+        group: root
+        mode: 0744
+      with_items:
+        - {src: 'cheat-checkhost.j2',           dest: '/usr/local/bin/cheat-virt-checkhost.sh'}
+

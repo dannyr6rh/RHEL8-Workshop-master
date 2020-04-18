@@ -1,0 +1,224 @@
+:sectnums:
+:sectnumlevels: 3
+:imagesdir: ./_images
+
+ifdef::env-github[]
+:tip-caption: :bulb:
+:note-caption: :information_source:
+:important-caption: :heavy_exclamation_mark:
+:caution-caption: :fire:
+:warning-caption: :warning:
+endif::[]
+
+:toc:
+:toclevels: 1
+
+= Virtualization Management
+
+NOTE: If you are using the web-console and do not see "Virtual Machines" in the menu, chances are that you need to sign-out and sign-in again.
+
+Provided your hardware is reasonably modern, chances are it supports virtualization.  This unit introduces simple virtualization management using kvm and libvirt.  You will learn how to:
+
+    * Install additional necessary software
+    * Enable necessary system services and firewall ports
+    * Use the command line to create and manage a virtual machine
+    * Use the web console (cockpit) to create and manage a virtual machine
+
+== Getting Started
+
+Starting on the host *workstation.example.com*, just make sure you're the root user.
+
+.[root@workstation]#
+----
+id
+
+uid=0(root) gid=0(root) groups=0(root)
+----
+
+Verify that you are on the right host for these exercises.
+
+.[root@workstation ~]#
+----
+cheat-virt-checkhost.sh
+----
+
+You are now ready to proceed with these exercises.
+
+
+
+
+
+Log into workstation VM as student and then use sudo to gain root priviledges.
+
+----
+sudo -i
+----
+
+=== Requirements
+
+First we need to ensure the system being used supports either:
+
+    * Intel VT-x and Intel 64 virtualization extensions
+    * AMD-V and the AMD64 virtualization extensions
+
+This is done with the following simple commands.
+
+You can start by examining the CPU flags (capabilities) advertised by your system.
+
+----
+grep -E 'svm|vmx' /proc/cpuinfo
+----
+
+You are looking for either the Intel flag (vtx) or the AMD flag (svm).  A more sophisticated command makes it a little easier to determine.
+
+----
+if grep -qE 'svm|vmx' /proc/cpuinfo ; then echo "Virt Supported" ; else echo "*WARN* Virt NOT Supported"; fi
+----
+
+After you install all the required software, there are some additional tools to provide more detailed reporting on system capabilities.
+
+=== Installation
+
+Verifying that yum repos are enabled to install Cockpit and the virtualization tools.
+
+----
+yum repolist
+----
+
+Make sure rhel-7-server-rpms, rhel-7-server-optional-rpms and rhel-7-server-extras-rpms repos are enabled.
+
+Installing Packages for virtualization enablement
+
+----
+yum install -y qemu-kvm libvirt virt-install libvirt-client libguestfs-tools
+----
+
+Installing Packages for webconsole enablement
+
+----
+yum install -y cockpit-machines 
+----
+
+To make the creating of custom VM images easy, install the Image-Builder tools
+
+----
+yum install -y lorax-composer composer-cli cockpit-composer
+----
+
+=== Enable System Services
+
+----
+# systemctl enable lorax-composer.socket libvirtd
+# systemctl start lorax-composer libvirtd
+----
+
+
+=== Verify Virtualization Host Status
+
+----
+virt-host-validate
+----
+
+----
+  QEMU: Checking for hardware virtualization                                 : PASS
+  QEMU: Checking if device /dev/kvm exists                                   : PASS
+  QEMU: Checking if device /dev/kvm is accessible                            : PASS
+  QEMU: Checking if device /dev/vhost-net exists                             : PASS
+  QEMU: Checking if device /dev/net/tun exists                               : PASS
+  QEMU: Checking for cgroup 'cpu' controller support                         : PASS
+  QEMU: Checking for cgroup 'cpuacct' controller support                     : PASS
+  QEMU: Checking for cgroup 'cpuset' controller support                      : PASS
+  QEMU: Checking for cgroup 'memory' controller support                      : PASS
+  QEMU: Checking for cgroup 'devices' controller support                     : PASS
+  QEMU: Checking for cgroup 'blkio' controller support                       : PASS
+  QEMU: Checking for device assignment IOMMU support                         : WARN (No ACPI IVRS table found, IOMMU either disabled in BIOS or not supported by this hardware platform)
+----
+
+== Deploy A Virtual-Machine with 'virt-install'
+
+Now you are going to leverage a Red Hat pre-built QCOW image to rapidly load a VM with Red Hat Enterprise Linux.
+
+=== Retrieve a QCOW Image
+
+First we need to grab a copy of the image
+
+----
+cd /var/lib/libvirt/images
+
+wget -O rhel-8.1-x86_64-kvm.qcow2 http://core.example.com/images/rhel-8.1-x86_64-kvm.qcow2
+----
+
+=== Modify the QCOW Image
+
+Now you need to set a root password in the image
+
+----
+virt-customize -a rhel-8.1-x86_64-kvm.qcow2 --root-password password:redhat --uninstall cloud-init
+----
+
+=== Deploy the QCOW Image
+
+Finally it's time to launch the VM
+
+----
+virt-install \
+  --import \
+  --name vmguest-01 \
+  --memory 2048 \
+  --vcpus 1 \
+  --disk /var/lib/libvirt/images/rhel-8.1-x86_64-kvm.qcow2 \
+  --graphics vnc \
+  --noautoconsole\
+  --os-variant rhel8.1
+----
+
+INFO: If you hop on the Virtual Machines Manager in the Web-Console, you an bring up the VM's Console and watch the deployment.
+
+=== Additional CLI Commands
+
+Some additional simple virtual machine management commands
+
+----
+virsh list
+virsh list --all
+
+virsh start vmguest-01
+virsh shutdown vmguest-01
+----
+
+== Explore VM Management with 'Web-Console'
+
+From th menu, select the Machines tab.  You will notice that the interface is still pretty rudimentary, but one critical feature is available: the console!
+
+Take some time to explore the capabilities of the Web-Console Machines webui.
+
+== Shutdown Virtual Machines
+
+WARN: It is IMPORTANT to stop or delete the deployed VMs
+
+Using either the CLI (or the Web-Console), be sure to shutdown the VM(s) you deployed to ensure additional workshop exercises perform reasonably.
+
+----
+virsh list --all
+
+virsh shutdown vmguest-01
+----
+
+== Additional Resources
+
+https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/networking_guide/ch-configure_network_bridging
+
+http://blog.leifmadsen.com/blog/2016/12/01/create-network-bridge-with-nmcli-for-libvirt/
+
+Cockpit Project Page
+
+    * link:http://cockpit-project.org/blog/category/release.html[Cockpit Project]
+
+[discrete]
+== End of Unit
+
+link:../RHEL8-Workshop.adoc#toc[Return to TOC]
+
+////
+Always end files with a blank line to avoid include problems.
+////
